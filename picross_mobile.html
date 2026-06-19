@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Picross — Mural Edition</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{height:100%;background:#0f1a2e}
+body{min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1a2e;color:#f0ece0;overscroll-behavior:none}
+
+/* safe area */
+:root{
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bot: env(safe-area-inset-bottom, 0px);
+  --teal:#4ecdc4;--amber:#f5a623;--red:#e74c3c;
+}
+
+/* ══ MENU ══════════════════════════════════════════════════════ */
+#main-menu{display:flex;flex-direction:column;min-height:100dvh;background:#0f1a2e}
+#menu-header{
+  padding: calc(var(--safe-top) + 20px) 20px 16px;
+  border-bottom:1px solid #1e3050;flex-shrink:0
+}
+#menu-header h1{font-size:20px;font-weight:700;letter-spacing:0.1em;color:var(--teal);margin-bottom:3px}
+#menu-header p{font-size:12px;color:#8394a8;line-height:1.5}
+#menu-body{padding:16px;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#menu-body h2{font-size:10px;color:#8394a8;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px}
+#pack-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pack-card{background:#0a1220;border:1px solid #1e3050;border-radius:10px;overflow:hidden;position:relative;active:scale(0.97)}
+.pack-card:active{opacity:0.85}
+.pack-thumb-wrap{width:100%;height:110px;position:relative;background:#050d1a;overflow:hidden}
+.pack-thumb-wrap canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+.pack-fog{position:absolute;inset:0;display:grid;gap:1px;padding:1px}
+.pack-badge{position:absolute;top:7px;right:7px;background:var(--teal);color:#0a1220;font-size:8px;font-weight:800;padding:2px 6px;border-radius:8px;z-index:2;letter-spacing:0.05em}
+.pack-body{padding:10px}
+.pack-size-tag{display:inline-block;background:#1e3050;color:#8394a8;font-size:9px;padding:2px 6px;border-radius:3px;margin-bottom:5px}
+.pack-body h3{font-size:13px;font-weight:600;color:#f0ece0;margin-bottom:2px}
+.pack-body .sub{font-size:10px;color:#8394a8;line-height:1.4;margin-bottom:7px}
+.pack-progress{height:2px;background:#1e3050;border-radius:1px;overflow:hidden;margin-bottom:4px}
+.pack-progress-fill{height:100%;border-radius:1px;transition:width 0.4s}
+.pack-pct{font-size:10px;color:#8394a8}
+#menu-footer{
+  padding:12px 16px calc(var(--safe-bot) + 12px);
+  border-top:1px solid #1e3050;display:flex;align-items:center;justify-content:space-between;flex-shrink:0
+}
+#menu-footer .total{font-size:11px;color:#8394a8}
+#menu-footer .total span{color:var(--teal);font-weight:600}
+.ghost-btn{padding:7px 14px;border-radius:6px;border:1px solid #2a3f5a;background:transparent;color:#8394a8;font-size:12px}
+
+/* ══ GAME SCREEN ═══════════════════════════════════════════════ */
+#game-screen{display:none;flex-direction:column;height:100dvh;overflow:hidden}
+
+/* topbar */
+#topbar{
+  display:flex;align-items:center;gap:10px;
+  padding:calc(var(--safe-top) + 8px) 14px 8px;
+  background:#0a1220;border-bottom:1px solid #1e3050;flex-shrink:0
+}
+#back-btn{padding:6px 12px;border-radius:6px;border:1px solid #2a3f5a;background:transparent;color:#8394a8;font-size:13px}
+#topbar-title{font-size:13px;font-weight:700;color:var(--teal);flex:1;letter-spacing:0.06em}
+#puzzle-label{font-size:11px;color:#8394a8;text-align:right;max-width:120px;line-height:1.2}
+
+/* puzzle area — scrollable, fills remaining space */
+#puzzle-area{
+  flex:1;overflow:auto;-webkit-overflow-scrolling:touch;
+  display:flex;align-items:flex-start;justify-content:center;
+  padding:10px 6px 4px;
+  background:#0f1a2e;
+}
+#clue-grid{display:grid;flex-shrink:0}
+.cell{
+  border:1px solid #1e3050;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  user-select:none;position:relative;touch-action:none;
+}
+.cell.filled{border-color:#c47d0a}
+.cell.filled.mural-col{transition:background 0.35s ease, border-color 0.35s ease}
+@keyframes cellReveal{0%{transform:scale(1.18);opacity:0.5}100%{transform:scale(1);opacity:1}}
+.cell.reveal{animation:cellReveal 0.3s ease forwards}
+.cell.marked{background:#3a0808;border-color:#8b1a1a}
+.cell.marked::after{content:'✕';font-weight:800;color:var(--red);position:absolute;line-height:1}
+.cell.fbr{border-right:2px solid #2e4a6a}
+.cell.fbb{border-bottom:2px solid #2e4a6a}
+.row-clue{display:flex;align-items:center;justify-content:flex-end;gap:1px;padding:0 2px;font-family:'Courier New',monospace;color:#8394a8;flex-shrink:0}
+.col-clue{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:2px 0;font-family:'Courier New',monospace;color:#8394a8;flex-shrink:0}
+.clue-num{line-height:1.15}
+
+/* bottom panel */
+#bottom-panel{
+  background:#0a1220;border-top:1px solid #1e3050;flex-shrink:0;
+  padding:8px 12px calc(var(--safe-bot) + 8px);
+  display:flex;flex-direction:column;gap:7px;
+}
+
+/* mural strip */
+#mural-row{display:flex;align-items:center;gap:8px}
+#mural-grid-small{display:grid;gap:2px;flex-shrink:0}
+.mc{border-radius:2px;position:relative;overflow:hidden;touch-action:manipulation}
+.mc.locked{background:#111e30;border:1px solid #1a2d42;display:flex;align-items:center;justify-content:center}
+.mc.active-p{border:2px solid var(--teal)!important}
+.mc.solved{border:1px solid #1a2d42}
+#mural-info{flex:1;min-width:0}
+#mural-pack-name{font-size:11px;font-weight:600;margin-bottom:2px}
+#mural-stat{font-size:10px;color:#8394a8}
+#pb-wrap{height:2px;background:#1a2a40;border-radius:1px;overflow:hidden;margin-top:4px}
+#pb{height:100%;border-radius:1px;transition:width 0.4s}
+
+/* controls row */
+#controls-row{display:flex;gap:6px;align-items:center}
+.ctrl{
+  padding:9px 0;border-radius:7px;border:1px solid #2a3f5a;
+  background:#0f1a2e;color:#f0ece0;font-size:12px;
+  text-align:center;flex:1;font-weight:500;
+}
+.ctrl.fill-on{background:var(--teal);color:#0a1220;border-color:var(--teal);font-weight:700}
+.ctrl.mark-on{background:#8b1a1a;color:#f0ece0;border-color:var(--red);font-weight:700}
+#hint-box{font-size:10px;color:#8394a8;line-height:1.45;min-height:0}
+
+/* ══ SUCCESS OVERLAY ═══════════════════════════════════════════ */
+.sw{display:none;position:fixed;inset:0;background:rgba(8,15,28,0.93);z-index:100;align-items:center;justify-content:center;padding:20px}
+.sw.show{display:flex}
+#sb{background:#0f1a2e;border:1px solid var(--teal);border-radius:14px;padding:28px 24px;text-align:center;width:100%;max-width:320px}
+#sb h2{color:var(--teal);font-size:20px;margin-bottom:8px}
+#sb p{color:#8394a8;font-size:12px;margin-bottom:20px;line-height:1.6}
+.sbtn-row{display:flex;gap:8px}
+.sbtn{flex:1;padding:11px 0;border-radius:8px;border:none;background:var(--amber);color:#0a1220;font-weight:700;font-size:14px}
+.sbtn.alt{background:transparent;border:1px solid #2a3f5a;color:#8394a8;font-weight:400}
+</style>
+</head>
+<body>
+
+<!-- ══ MAIN MENU ══ -->
+<div id="main-menu">
+  <div id="menu-header">
+    <h1>PICROSS</h1>
+    <p>Solve nonogram puzzles to reveal pixel murals. No timers, no penalties.</p>
+  </div>
+  <div id="menu-body">
+    <h2>Choose a pack</h2>
+    <div id="pack-cards"></div>
+  </div>
+  <div id="menu-footer">
+    <div class="total">Solved: <span id="menu-total">0</span> total</div>
+    <button class="ghost-btn" onclick="resetAll()">Reset all</button>
+  </div>
+</div>
+
+<!-- ══ GAME SCREEN ══ -->
+<div id="game-screen">
+  <div id="topbar">
+    <button id="back-btn" onclick="goMenu()">← Menu</button>
+    <div id="topbar-title">PICROSS</div>
+    <div id="puzzle-label" id="puzzle-label"></div>
+  </div>
+
+  <div id="puzzle-area">
+    <div id="clue-grid"></div>
+  </div>
+
+  <div id="bottom-panel">
+    <!-- mural strip -->
+    <div id="mural-row">
+      <div id="mural-grid-small"></div>
+      <div id="mural-info">
+        <div id="mural-pack-name"></div>
+        <div id="mural-stat"></div>
+        <div id="pb-wrap"><div id="pb"></div></div>
+      </div>
+    </div>
+    <!-- mode + util buttons -->
+    <div id="controls-row">
+      <div class="ctrl fill-on" id="btn-fill" onclick="setMode('fill')">✦ Fill</div>
+      <div class="ctrl" id="btn-mark" onclick="setMode('mark')">✕ Mark</div>
+      <div class="ctrl" style="flex:0.7" onclick="clearPuzzle()">↺</div>
+      <div class="ctrl" style="flex:0.7" onclick="getHint()">?</div>
+    </div>
+    <div id="hint-box">Tap a clue number to inspect that row or column.</div>
+  </div>
+</div>
+
+<!-- ══ SUCCESS ══ -->
+<div class="sw" id="soverlay">
+  <div id="sb">
+    <h2 id="stitle">Puzzle complete!</h2>
+    <p id="smsg"></p>
+    <div class="sbtn-row">
+      <button class="sbtn alt" onclick="goMenu()">Menu</button>
+      <button class="sbtn" onclick="closeSuccess()">Continue →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const GRID = 15;
+
+/* ── palettes ── */
+const DRAGON_PAL=['#050508','#1a0505','#3d0c0c','#7a1a1a','#c0392b','#e74c3c','#f39c12','#f5d76e','#2c1a08','#5a3010','#8a5020','#c8a060','#1a1a2a','#2e2e4a','#4a4a7a','#7070a0'];
+const DL_TILES=[[0,12],[0,12],[12,13],[12,13],[0,12],[0,12],[1,13],[12,13],[13,14],[13,14],[12,13],[1,13],[1,3],[8,9],[9,10],[9,10],[8,9],[1,3],[2,4],[8,6],[9,6],[9,6],[8,6],[2,4],[1,3],[8,9],[3,5],[3,5],[8,9],[1,3],[0,1],[1,2],[2,3],[2,3],[1,2],[0,1]];
+const GODS_PAL=['#04080f','#0a1628','#152a50','#1f3d72','#2855a0','#3d6ec0','#5e8fd8','#9abce8','#1a1408','#3a2e10','#6b5010','#b8860b','#d4a017','#f0c040','#f8e88a','#fdf6d8'];
+const AG_TILES=[[0,1],[0,1],[1,2],[1,2],[1,2],[1,2],[0,1],[0,1],[1,3],[1,3],[2,3],[2,4],[2,4],[2,3],[1,3],[1,3],[2,5],[3,5],[3,6],[4,6],[4,6],[3,6],[3,5],[2,5],[1,9],[3,11],[4,12],[5,12],[5,12],[4,12],[3,11],[1,9],[1,9],[2,11],[3,12],[4,13],[4,13],[3,12],[2,11],[1,9],[8,10],[9,11],[10,12],[11,13],[11,13],[10,12],[9,11],[8,10],[8,9],[9,10],[10,11],[11,12],[11,12],[10,11],[9,10],[8,9],[0,8],[1,9],[2,10],[3,11],[3,11],[2,10],[1,9],[0,8]];
+const FOREST_PAL=['#060e06','#0a1a10','#142a18','#1a4a28','#2d6a4f','#52b788','#95d5b2','#c8f0df','#0f2a1a','#1a5c3a','#4ecdc4','#a8e6cf','#081a0a','#0f3a18','#1a5c3a','#6fcf97'];
+const FOREST_TILES=[[0,12],[0,12],[12,13],[12,13],[0,12],[0,12],[12,13],[12,13],[0,12],[1,4],[12,13],[13,14],[13,14],[12,13],[1,4],[13,14],[12,13],[1,4],[1,3],[2,5],[3,5],[3,5],[2,5],[1,3],[3,5],[2,5],[1,3],[0,3],[1,4],[2,5],[2,5],[1,4],[0,3],[2,5],[1,4],[0,3],[0,1],[1,2],[2,3],[2,3],[1,2],[0,1],[2,3],[1,2],[0,1],[0,1],[0,1],[1,2],[1,2],[0,1],[0,1],[1,2],[0,1],[0,1],[0,3],[1,4],[2,5],[2,5],[1,4],[0,3],[2,5],[1,4],[0,3],[0,1],[0,1],[1,2],[1,2],[0,1],[0,1],[1,2],[0,1],[0,1],[0,1],[0,1],[1,2],[1,2],[0,1],[0,1],[1,2],[0,1],[0,1]];
+const OCEAN_PAL=['#020d1a','#041520','#061e30','#0a2a4a','#0d3a60','#185fa5','#2980b9','#5dade2','#1b4f72','#2e86c1','#4ecdc4','#85c1e9','#021015','#0a3555','#2a9d8f','#a2d9f7'];
+const OCEAN_TILES=[[0,12],[12,13],[13,14],[13,14],[12,13],[0,12],[13,14],[12,13],[0,12],[1,3],[12,13],[3,5],[3,5],[12,13],[1,3],[3,5],[12,13],[1,3],[1,4],[2,5],[4,6],[4,6],[2,5],[1,4],[4,6],[2,5],[1,4],[0,3],[1,4],[2,5],[3,6],[1,4],[0,3],[2,5],[1,4],[0,3],[0,2],[1,3],[2,4],[2,4],[1,3],[0,2],[2,4],[1,3],[0,2],[0,1],[1,2],[2,3],[2,3],[1,2],[0,1],[2,3],[1,2],[0,1],[0,12],[1,13],[2,14],[2,14],[1,13],[0,12],[2,14],[1,13],[0,12],[0,1],[0,1],[1,2],[1,2],[0,1],[0,1],[1,2],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1]];
+
+const PACKS=[
+  {id:'dragon',name:"Dragon's Lair",dim:6,accent:'#c0392b',accentLight:'#e74c3c',desc:'36 puzzles · 6×6 mural',pal:DRAGON_PAL,tiles:DL_TILES,names:['Night Sky','Starless Void','Mountain Peak','Rocky Crag','Dark Summit','Storm Cloud','Left Ridge','Cliff Face','Stone Tower L','Stone Tower R','Cliff Face','Right Ridge','Castle Gate','Dungeon Wall','Dragon Wing L','Dragon Wing R','Dungeon Wall','Castle Gate','Dragon Body L','Treasure Hoard','Dragon Claw L','Dragon Claw R','Treasure Hoard','Dragon Body R','Castle Base L','Moat Wall','Dragon Fire L','Dragon Fire R','Moat Wall','Castle Base R','Dark Earth L','Scorched Ground','Bone Field L','Bone Field R','Scorched Ground','Dark Earth R']},
+  {id:'gods',name:'Age of Gods',dim:8,accent:'#b8860b',accentLight:'#f0c040',desc:'64 puzzles · 8×8 mural',pal:GODS_PAL,tiles:AG_TILES,names:['Void L','Void R','Heaven Mist','Heaven Mist','Heaven Mist','Heaven Mist','Void L','Void R','Aether L','Aether R','Cloud Left','Cloud Peak L','Cloud Peak R','Cloud Right','Aether L','Aether R','Storm Wind','Sky Light L','Summit Mist L','Peak Glow L','Peak Glow R','Summit Mist R','Sky Light R','Storm Wind','God Light L','Upper Arch L','Column Top L','Frieze Left','Frieze Right','Column Top R','Upper Arch R','God Light R','Inner Glow L','Hall Wall L','Hall Pillar L','Zeus Throne','Hera Throne','Hall Pillar R','Hall Wall R','Inner Glow R','Lower Arch L','Capital L','Column Mid L','Gold Step L','Gold Step R','Column Mid R','Capital R','Lower Arch R','Temple Base L','Base Stone L','Plinth Left','Step One L','Step One R','Plinth Right','Base Stone R','Temple Base R','Dark Earth L','Ground Mist L','Root Stone L','Fallen Leaf L','Fallen Leaf R','Root Stone R','Ground Mist R','Dark Earth R']},
+  {id:'forest',name:'Moonlit Forest',dim:3,accent:'#52b788',accentLight:'#95d5b2',desc:'9 puzzles · 3×3 mural',pal:FOREST_PAL,tiles:FOREST_TILES,names:['Forest Canopy','Stream Glimmer','Moon Glow','Ancient Stones','Deer Path','Mushroom Ring','Firefly Dance','Night Bloom','Starfall']},
+  {id:'ocean',name:'Deep Ocean',dim:3,accent:'#2980b9',accentLight:'#5dade2',desc:'9 puzzles · 3×3 mural',pal:OCEAN_PAL,tiles:OCEAN_TILES,names:['Coral Garden','Kelp Forest','Anglerfish Deep','Sunken Ship','Jellyfish Bloom','Seahorse Cove','Whale Shadow','Abyssal Plain','Ocean Floor']}
+];
+
+/* ── engine ── */
+function genPat(seed){
+  let s=(seed+1)*1234567+99991;
+  function rng(){s=(s*16807)%2147483647;return s/2147483647}
+  return Array.from({length:GRID},()=>Array.from({length:GRID},()=>rng()>0.41?1:0));
+}
+function getClues(g){
+  const rows=[],cols=[];
+  for(let r=0;r<GRID;r++){const cl=[];let n=0;for(let c=0;c<GRID;c++){if(g[r][c])n++;else if(n){cl.push(n);n=0}}if(n)cl.push(n);rows.push(cl.length?cl:[0]);}
+  for(let c=0;c<GRID;c++){const cl=[];let n=0;for(let r=0;r<GRID;r++){if(g[r][c])n++;else if(n){cl.push(n);n=0}}if(n)cl.push(n);cols.push(cl.length?cl:[0]);}
+  return{rows,cols};
+}
+function tileColor(pack,idx,filled){const t=pack.tiles[idx]||[0,1];return pack.pal[filled?t[1]:t[0]];}
+
+/* ── state ── */
+let G={activePack:0,mode:'fill',packs:{}};
+function initPack(pi){
+  const p=PACKS[pi];if(G.packs[p.id])return;
+  G.packs[p.id]={puzzles:Array.from({length:p.dim*p.dim},(_,i)=>{const pat=genPat(pi*200+i);return{pat,clues:getClues(pat),player:Array.from({length:GRID},()=>Array(GRID).fill(0)),solved:false};}),current:0};
+}
+const pd=()=>PACKS[G.activePack];
+const ps=()=>G.packs[pd().id];
+const puzz=()=>ps().puzzles[ps().current];
+function tryLoad(){try{const d=localStorage.getItem('picross_mobile_v1');if(d){const sv=JSON.parse(d);G.activePack=sv.ap||0;if(sv.packs)Object.assign(G.packs,sv.packs);}}catch(e){}}
+function saveG(){try{localStorage.setItem('picross_mobile_v1',JSON.stringify({ap:G.activePack,packs:G.packs}));}catch(e){}}
+
+/* ── menu ── */
+function drawThumb(pack,st,cv){
+  const d=pack.dim;cv.width=d*15;cv.height=d*15;
+  const ctx=cv.getContext('2d');ctx.fillStyle=pack.pal[0];ctx.fillRect(0,0,cv.width,cv.height);
+  for(let i=0;i<d*d;i++){
+    const col=i%d,row=Math.floor(i/d),pu=st.puzzles[i];if(!pu.solved)continue;
+    for(let r=0;r<15;r++)for(let c=0;c<15;c++){ctx.fillStyle=tileColor(pack,i,pu.pat[r][c]===1);ctx.fillRect(col*15+c,row*15+r,1,1);}
+  }
+}
+function renderMenu(){
+  const cards=document.getElementById('pack-cards');cards.innerHTML='';
+  let tot=0;
+  PACKS.forEach((p,i)=>{
+    initPack(i);const st=G.packs[p.id];
+    const done=st.puzzles.filter(x=>x.solved).length,total=p.dim*p.dim;tot+=done;
+    const pct=Math.round(done/total*100);
+    const card=document.createElement('div');card.className='pack-card'+(done===total?' complete':'');
+    if(done>0)card.style.borderColor=p.accent+'88';
+    if(done===total){const b=document.createElement('div');b.className='pack-badge';b.textContent='DONE';card.appendChild(b);}
+    const tw=document.createElement('div');tw.className='pack-thumb-wrap';
+    const cv=document.createElement('canvas');cv.style.cssText='width:100%;height:100%;display:block;image-rendering:pixelated';
+    drawThumb(p,st,cv);tw.appendChild(cv);
+    const fog=document.createElement('div');fog.className='pack-fog';
+    fog.style.gridTemplateColumns=`repeat(${p.dim},1fr)`;fog.style.gridTemplateRows=`repeat(${p.dim},1fr)`;
+    for(let j=0;j<total;j++){const lc=document.createElement('div');if(!st.puzzles[j].solved)lc.style.background='rgba(4,8,18,0.62)';fog.appendChild(lc);}
+    tw.appendChild(fog);card.appendChild(tw);
+    const body=document.createElement('div');body.className='pack-body';
+    const tag=document.createElement('span');tag.className='pack-size-tag';tag.textContent=p.desc;body.appendChild(tag);
+    const h3=document.createElement('h3');h3.textContent=p.name;body.appendChild(h3);
+    const bar=document.createElement('div');bar.className='pack-progress';
+    const fill=document.createElement('div');fill.className='pack-progress-fill';fill.style.cssText=`width:${pct}%;background:${p.accent}`;bar.appendChild(fill);body.appendChild(bar);
+    const pctEl=document.createElement('div');pctEl.className='pack-pct';
+    pctEl.textContent=done===0?'Not started':done===total?'Complete!':pct+'% — '+done+'/'+total;body.appendChild(pctEl);
+    card.appendChild(body);
+    card.addEventListener('click',()=>openPack(i));
+    cards.appendChild(card);
+  });
+  document.getElementById('menu-total').textContent=tot;
+}
+function resetAll(){if(!confirm('Reset ALL progress?'))return;G.packs={};PACKS.forEach((_,i)=>initPack(i));saveG();renderMenu();}
+function goMenu(){document.getElementById('main-menu').style.display='flex';document.getElementById('game-screen').style.display='none';renderMenu();}
+function openPack(pi){
+  G.activePack=pi;initPack(pi);
+  const st=ps();const next=st.puzzles.findIndex(p=>!p.solved);if(next>=0)st.current=next;
+  document.getElementById('main-menu').style.display='none';
+  document.getElementById('game-screen').style.display='flex';
+  document.getElementById('mural-pack-name').textContent=pd().name;
+  document.getElementById('mural-pack-name').style.color=pd().accentLight;
+  document.getElementById('pb').style.background=pd().accent;
+  renderMural();renderPuzzle();updateStats();saveG();
+}
+
+/* ── mode ── */
+function setMode(m){
+  G.mode=m;
+  document.getElementById('btn-fill').className='ctrl'+(m==='fill'?' fill-on':'');
+  document.getElementById('btn-mark').className='ctrl'+(m==='mark'?' mark-on':'');
+}
+
+/* ── touch input ── */
+let touching=false,touchAction=null;
+
+function applyCell(r,c,init){
+  const pg=puzz().player,cur=pg[r][c];
+  if(init){
+    touchAction=G.mode==='fill'?(cur===1?'clear':'fill'):(cur===2?'clear':'mark');
+  }
+  if(G.mode==='fill')pg[r][c]=touchAction==='fill'?1:(touchAction==='clear'&&cur===1?0:cur);
+  else pg[r][c]=touchAction==='mark'?2:(touchAction==='clear'&&cur===2?0:cur);
+  renderCell(r,c,false);saveG();
+}
+
+function cellsFromTouch(e){
+  const t=e.touches?e.touches[0]:e;
+  const el=document.elementFromPoint(t.clientX,t.clientY);
+  if(el&&el.dataset.r!==undefined)return el;
+  return null;
+}
+
+/* ── puzzle render ── */
+function computeCellSize(){
+  const vw=window.innerWidth;
+  // pick size that fits the 15 cells + clue space on screen
+  // clue cols max ~4 digits wide at a given font; we size cells first
+  const maxCellPx=Math.floor((vw-8)/18); // 15 cells + ~3 col for clues
+  return Math.max(18,Math.min(30,maxCellPx));
+}
+
+function renderPuzzle(){
+  const p=pd(),st=ps(),pu=puzz(),pidx=st.current;
+  const lbl=document.getElementById('puzzle-label');
+  if(lbl)lbl.textContent=`${pidx+1}. ${p.names[pidx]||'Puzzle '+(pidx+1)}`;
+
+  const cl=pu.clues;
+  const maxR=Math.max(...cl.rows.map(r=>r.length));
+  const maxC=Math.max(...cl.cols.map(c=>c.length));
+  const sz=computeCellSize();
+  const fs=Math.max(8,Math.floor(sz*0.42));
+  const cw=maxR*(fs+3)+4;
+  const ch=maxC*(fs+2)+4;
+
+  const gc=document.getElementById('clue-grid');
+  gc.innerHTML='';
+  gc.style.cssText=`display:grid;grid-template-columns:${cw}px repeat(${GRID},${sz}px);grid-template-rows:${ch}px repeat(${GRID},${sz}px)`;
+
+  gc.appendChild(Object.assign(document.createElement('div'),{style:`grid-column:1;grid-row:1`}));
+
+  for(let c=0;c<GRID;c++){
+    const el=document.createElement('div');el.className='col-clue';
+    el.style.cssText=`grid-column:${c+2};grid-row:1;height:${ch}px;font-size:${fs}px`;
+    cl.cols[c].forEach(n=>{const s=document.createElement('span');s.className='clue-num';s.textContent=n;el.appendChild(s);});
+    el.addEventListener('click',()=>hlCol(c));gc.appendChild(el);
+  }
+
+  for(let r=0;r<GRID;r++){
+    const el=document.createElement('div');el.className='row-clue';
+    el.style.cssText=`grid-column:1;grid-row:${r+2};width:${cw}px;font-size:${fs}px`;
+    cl.rows[r].forEach(n=>{const s=document.createElement('span');s.className='clue-num';s.textContent=n;el.appendChild(s);});
+    el.addEventListener('click',()=>hlRow(r));gc.appendChild(el);
+
+    for(let c=0;c<GRID;c++){
+      const cell=document.createElement('div');
+      cell.id=`c-${r}-${c}`;
+      cell.dataset.r=r;cell.dataset.c=c;
+      cell.style.cssText=`grid-column:${c+2};grid-row:${r+2};font-size:${Math.floor(sz*0.55)}px`;
+
+      // touch
+      cell.addEventListener('touchstart',e=>{e.preventDefault();touching=true;applyCell(r,c,true);},{passive:false});
+      cell.addEventListener('touchmove',e=>{
+        e.preventDefault();
+        if(!touching)return;
+        const el2=cellsFromTouch(e);
+        if(el2&&el2.dataset.r!==undefined)applyCell(parseInt(el2.dataset.r),parseInt(el2.dataset.c),false);
+      },{passive:false});
+      cell.addEventListener('touchend',()=>{touching=false;touchAction=null;});
+      // mouse fallback
+      cell.addEventListener('mousedown',e=>{e.preventDefault();touching=true;applyCell(r,c,true);});
+      cell.addEventListener('mouseover',()=>{if(touching)applyCell(r,c,false);});
+
+      gc.appendChild(cell);renderCell(r,c,false);
+    }
+  }
+}
+document.addEventListener('mouseup',()=>{touching=false;touchAction=null;});
+
+function cellFillColor(r,c){
+  const p=pd(),pu=puzz(),pidx=ps().current;
+  if(pu.solved){
+    return tileColor(p,pidx,pu.pat[r][c]===1);
+  }
+  return '#f5a623'; // always amber while unsolved
+}
+
+function renderCell(r,c,animate){
+  const el=document.getElementById(`c-${r}-${c}`);if(!el)return;
+  const pu=puzz();
+  const v=pu.player[r][c];
+  const solved=pu.solved;
+  el.className='cell'+(v===1?' filled'+(solved?' mural-col':''):v===2?' marked':'');
+  if((c+1)%5===0&&c<14)el.classList.add('fbr');
+  if((r+1)%5===0&&r<14)el.classList.add('fbb');
+  el.dataset.r=r;el.dataset.c=c;
+  if(v===1){
+    const col=cellFillColor(r,c);
+    el.style.background=col;
+    el.style.borderColor=solved?col:'#c47d0a';
+    if(animate){el.classList.add('reveal');setTimeout(()=>el.classList.remove('reveal'),350);}
+  }else{
+    el.style.background='';
+    el.style.borderColor='';
+  }
+}
+
+function renderAllCells(animate){
+  for(let r=0;r<GRID;r++)for(let c=0;c<GRID;c++)renderCell(r,c,animate);
+}
+
+function hlRow(r){
+  document.querySelectorAll('.cell').forEach(el=>{el.style.outline=parseInt(el.dataset.r)===r?'1px solid #4ecdc4':'';});
+  const cl=puzz().clues;
+  document.getElementById('hint-box').textContent=`Row ${r+1}: [${cl.rows[r].join(', ')}] — ${cl.rows[r].reduce((a,b)=>a+b,0)} filled`;
+}
+function hlCol(c){
+  document.querySelectorAll('.cell').forEach(el=>{el.style.outline=parseInt(el.dataset.c)===c?'1px solid #4ecdc4':'';});
+  const cl=puzz().clues;
+  document.getElementById('hint-box').textContent=`Col ${c+1}: [${cl.cols[c].join(', ')}] — ${cl.cols[c].reduce((a,b)=>a+b,0)} filled`;
+}
+
+/* ── mural ── */
+function renderMural(){
+  const p=pd(),st=ps();
+  const total=p.dim*p.dim,done=st.puzzles.filter(x=>x.solved).length;
+  const pct=Math.round(done/total*100);
+  document.getElementById('mural-stat').textContent=`${done} / ${total} puzzles · ${pct}%`;
+  document.getElementById('pb').style.width=pct+'%';
+
+  const mg=document.getElementById('mural-grid-small');
+  const cellSz=Math.min(20,Math.floor(100/p.dim));
+  mg.style.cssText=`display:grid;grid-template-columns:repeat(${p.dim},${cellSz}px);gap:1px;width:${p.dim*cellSz+(p.dim-1)}px`;
+  mg.innerHTML='';
+  for(let i=0;i<total;i++){
+    const pu=st.puzzles[i];
+    const cell=document.createElement('div');
+    cell.className='mc'+(pu.solved?' solved':' locked');
+    if(i===st.current)cell.classList.add('active-p');
+    cell.style.height=cellSz+'px';
+    cell.addEventListener('click',()=>selectPuzzle(i));
+    if(pu.solved){
+      const cv=document.createElement('canvas');cv.width=15;cv.height=15;
+      cv.style.cssText='width:100%;height:100%;image-rendering:pixelated;display:block';
+      const ctx=cv.getContext('2d');
+      for(let r=0;r<15;r++)for(let c=0;c<15;c++){ctx.fillStyle=tileColor(p,i,pu.pat[r][c]===1);ctx.fillRect(c,r,1,1);}
+      cell.appendChild(cv);
+    }else if(i===st.current){
+      const dot=document.createElement('div');
+      dot.style.cssText=`width:4px;height:4px;border-radius:50%;background:${p.accentLight}`;
+      cell.appendChild(dot);
+    }
+    mg.appendChild(cell);
+  }
+}
+
+function updateStats(){
+  renderMural();
+  const allTotal=Object.values(G.packs).reduce((a,pk)=>a+pk.puzzles.filter(x=>x.solved).length,0);
+}
+
+function selectPuzzle(i){ps().current=i;renderPuzzle();renderMural();saveG();}
+
+function clearPuzzle(){
+  puzz().player=Array.from({length:GRID},()=>Array(GRID).fill(0));
+  for(let r=0;r<GRID;r++)for(let c=0;c<GRID;c++)renderCell(r,c,false);
+  saveG();document.getElementById('hint-box').textContent='Puzzle cleared.';
+}
+
+function getHint(){
+  const cl=puzz().clues,tips=[];
+  for(let r=0;r<GRID;r++){const s=cl.rows[r].reduce((a,b)=>a+b,0);if(s===15)tips.push(`Row ${r+1}: fill entire row`);else if(s===0)tips.push(`Row ${r+1}: mark all empty`);else{const min=s+cl.rows[r].length-1;if(min>=12)tips.push(`Row ${r+1}: very constrained (sum ${s})`);}}
+  for(let c=0;c<GRID;c++){const s=cl.cols[c].reduce((a,b)=>a+b,0);if(s===15)tips.push(`Col ${c+1}: fill entire column`);else if(s===0)tips.push(`Col ${c+1}: mark all empty`);}
+  const fb=["A clue N in 15 cells: middle (2N−15) cells are guaranteed fills","Mark definite empties first, then deduce fills","Work rows and columns together","If clue sum + gaps = 15, the layout is fully determined"];
+  document.getElementById('hint-box').textContent=tips.length?tips[Math.floor(Math.random()*tips.length)]:fb[Math.floor(Math.random()*fb.length)];
+}
+
+function checkSolution(){
+  const pu=puzz();
+  for(let r=0;r<GRID;r++)for(let c=0;c<GRID;c++)if((pu.player[r][c]===1)!==(pu.pat[r][c]===1))return false;
+  return true;
+}
+function closeSuccess(){
+  document.getElementById('soverlay').classList.remove('show');
+  const st=ps(),next=st.puzzles.findIndex(p=>!p.solved);
+  if(next>=0){st.current=next;renderPuzzle();renderMural();}
+}
+
+let lastKey='';
+setInterval(()=>{
+  if(document.getElementById('game-screen').style.display==='none')return;
+  const pu=puzz();if(pu.solved)return;
+  const key=pu.player.map(r=>r.join('')).join('|');
+  if(key===lastKey)return;lastKey=key;
+  const filled=pu.player.flat().filter(v=>v===1).length;
+  const target=pu.pat.flat().filter(v=>v===1).length;
+  if(filled===target&&checkSolution()){
+    pu.solved=true;
+    renderAllCells(true); // reveal mural colours with animation
+    updateStats();saveG();
+    const p=pd(),st=ps();
+    const done=st.puzzles.filter(x=>x.solved).length,tot=p.dim*p.dim;
+    document.getElementById('stitle').textContent=done===tot?'Mural revealed!':'Puzzle complete!';
+    document.getElementById('smsg').textContent=done===tot
+      ?`The full "${p.name}" mural is yours!`
+      :`Tile ${st.current+1} uncovered. ${tot-done} left.`;
+    document.getElementById('soverlay').classList.add('show');
+    lastKey='';
+  }
+},300);
+
+window.addEventListener('resize',()=>{
+  if(document.getElementById('game-screen').style.display!=='none')renderPuzzle();
+});
+
+tryLoad();PACKS.forEach((_,i)=>initPack(i));renderMenu();
+</script>
+</body>
+</html>
